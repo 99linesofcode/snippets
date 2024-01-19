@@ -107,7 +107,15 @@
             - .zshrc
             - .config/nvim
 
-        # TODO remove ssh-agent and ssh-agent identity loading
+        - name: Remove keychain plugin and identity loading configuration from .zshrc
+          ansible.builtin.lineinfile:
+            path: "$HOME/.zshrc"
+            regexp: "{{ item }}"
+            state: absent
+          loop:
+            - "gpg-agent$"
+            - "^zstyle :omz:plugins:keychain agents gpg,ssh"
+            - "^zstyle :omz:plugins:keychain identities .*"
 
         # - name: Remove root SSH access
         #   ansible.posix.authorized_key:
