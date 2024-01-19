@@ -88,6 +88,7 @@
             dest: "$HOME/dotfiles"
             single_branch: yes
             version: main
+            force: true
 
         - name: Install Neovim through Asdf
           ansible.builtin.shell: |
@@ -127,8 +128,8 @@
       become: true
       become_user: "{{ user.name }}"
 
-      # - name: Remove root SSH access
-      #   ansible.posix.authorized_key:
-      #     user: root
-      #     state: absent
-      #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
+    - name: Remove public SSH key from root account
+      ansible.posix.authorized_key:
+        user: root
+        state: absent
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
