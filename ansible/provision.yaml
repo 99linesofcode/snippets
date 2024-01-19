@@ -1,124 +1,135 @@
 ---
-name: Provision
-hosts: personal
-tasks:
-  - name: Update package registry
-    ansible.builtin.apt:
-      upgrade: dist
+- name: Provision
+  hosts: personal
+  vars_files:
+    - ./variables.yaml
+  tasks:
+    - name: Update package registry
+      ansible.builtin.apt:
+        upgrade: dist
 
-  - name: Install base dependencies
-    ansible.builtin.apt:
-      pkg:
-        - curl
-        - git
-        - dbus-user-session
-        - docker.io
-        - zsh
-        - ripgrep
-        - fd-find
-        - tmux
+    - name: Install base dependencies
+      ansible.builtin.apt:
+        pkg:
+          - curl
+          - git
+          - dbus-user-session
+          - docker.io
+          - zsh
+          - ripgrep
+          - fd-find
+          - tmux
 
-  - name: Ensure user group 1000 exists
-    ansible.builtin.group:
-      name: jordy
-      state: present
-      gid: 1000
+    - name: Disable and mask Docker daemon
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: false
+        masked: true
 
-  - name: Add user 'jordy' and add it to group 1000
-    ansible.builtin.user:
-      name: jordy
-      uid: 1000
-      group: 1000
-      shell: /bin/zsh
+    - name: Ensure user group 1000 exists
+      ansible.builtin.group:
+        name: "{{ user.name }}"
+        state: present
+        gid: 1000
 
-  - name: Create user directories
-    ansible.builtin.file:
-      path: "/home/jordy/{{ item }}"
-      state: directory
-      owner: jordy
-      group: jordy
-      mode: 0700
-      loop:
-        - .ssh/
-        - .config/
-        - .local/
-        - .local/bin/
-        - .local/share/
-        - .local/state/
-        - scripts/
+    - name: Create user "{{ user.name }}", set group id and add to relevant groups
+      ansible.builtin.user:
+        name: "{{ user.name }}"
+        password: "{{ user.password | password_hash('sha512', user.salt) }}"
+        append: true
+        uid: 1000
+        group: 1000
+        groups:
+          - sudo
+          - docker
+        shell: /bin/zsh
 
-  - name: Copy authorized_keys SSH keys to jordy user
-    ansible.builtin.copy:
-      src: /root/.ssh/authorized_keys
-      dest: /home/jordy/.ssh/authorized_keys
-      remote_src: true
-      owner: jordy
-      group: jordy
-      mode: 0600
+    - name: Configure user environment
+      block:
+        - name: Create user directories
+          ansible.builtin.file:
+            path: "$HOME/{{ item }}"
+            state: directory
+            mode: 0700
+          loop:
+            - .ssh/
+            - .config/
+            - .local/bin/
+            - .local/
+            - .local/share/
+            - .local/state/
 
-  - name: Disable and mask Docker daemon
-    ansible.builtin.systemd_service:
-      name: docker
-      enabled: false
-      masked: true
+        - name: Allow SSH access for user "{{ user.name }}"
+          ansible.posix.authorized_key:
+            user: "{{ user.name }}"
+            state: present
+            key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
 
-  - name: Add 'jordy' user to groups
-    ansible.builtin.user:
-      name: jordy
-      groups:
-        - sudo
-        - docker
-      append: true
+        - name: Download Oh My Zsh
+          ansible.builtin.get_url:
+            url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+            dest: "$HOME/oh-my-zsh-install.sh"
+            mode: 0700
 
-  - name: Download oh-my-zsh
-    ansible.builtin.get_url:
-      url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
-      dest: /home/jordy/oh-my-zsh-install.sh
-      owner: jordy
-      group: jordy
-      mode: 0700
+        - name: Install Oh My Zsh
+          ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
+          args:
+            chdir: "$HOME"
+            creates: "$HOME/.oh-my-zsh/"
 
-  - name: Install oh-my-zsh
-    ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
-    become: yes
-    become_user: jordy
-    args:
-      chdir: /home/jordy/
-      creates: /home/jordy/.oh-my-zsh/
+        - name: Install Asdf. The tool version manager
+          ansible.builtin.git:
+            repo: https://github.com/asdf-vm/asdf.git
+            dest: "$HOME/.asdf"
 
-  - name: Clean up installation artifacts
-    ansible.builtin.file:
-      path: "/home/jordy/{{ item }}"
-      state: absent
-    loop:
-      - oh-my-zsh-install.sh
-      - .zshrc
+        - name: Pull dotfiles repository
+          ansible.builtin.git:
+            repo: https://github.com/99linesofcode/dotfiles.git
+            dest: "$HOME/dotfiles"
+            single_branch: yes
+            version: main
+            force: true
 
-  # TODO figure out how to change file ownership
-  # TODO clone Asdf
-  # TODO install latest version of neovim
+        - name: Install Neovim through Asdf
+          ansible.builtin.shell: |
+            export ASDF_DIR="$HOME/.asdf"
+            . $HOME/.asdf/asdf.sh
+            asdf plugin add neovim
+            asdf install neovim stable
+            asdf global neovim stable
 
-  - name: Clone dotfiles repository
-    ansible.builtin.git:
-      repo: https://github.com/99linesofcode/dotfiles.git
-      dest: /home/jordy/dotfiles
-      single_branch: yes
-      version: main
+        - name: Clean up installation artifacts and other unused files
+          ansible.builtin.file:
+            path: "$HOME/{{ item }}"
+            state: absent
+          loop:
+            - .bash_logout
+            - .bashrc
+            - .profile
+            - .zshrc
+            - oh-my-zsh-install.sh
 
-  - name: Symlink relevant dotfiles
-    ansible.builtin.file:
-      src: "/home/jordy/dotfiles/{{ item }}"
-      dest: "/home/jordy/{{ item }}"
-      owner: jordy
-      group: jordy
-      state: link
-    loop:
-      - .zshrc
-      - .config/nvim
+        - name: Create the relevant symbolic links
+          ansible.builtin.shell: "ln -sfn {{ item.src }} {{ item.dest }}"
+          loop:
+            - { src: "$HOME/dotfiles/.zshrc", dest: "$HOME/.zshrc" }
+            - { src: "$HOME/dotfiles/.config/nvim", dest: "$HOME/.config/nvim" }
+            - { src: "$(which nvim)", dest: "$HOME/.local/bin/vi" }
 
-  # TODO remove ssh-agent and ssh-agent identity loading
+        - name: Remove keychain plugin and identity loading configuration from .zshrc
+          ansible.builtin.lineinfile:
+            path: "$HOME/.zshrc"
+            regexp: "{{ item }}"
+            state: absent
+          loop:
+            - "gpg-agent$"
+            - "^zstyle :omz:plugins:keychain agents gpg,ssh"
+            - "^zstyle :omz:plugins:keychain identities .*"
+      become: true
+      become_user: "{{ user.name }}"
 
-  - name: Disable root SSH access
-    ansible.builtin.file:
-      path: "/root/.ssh/authorized_keys"
-      state: absent
+    - name: Remove public SSH key from root account
+      ansible.posix.authorized_key:
+        user: root
+        state: absent
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
