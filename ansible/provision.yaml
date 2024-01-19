@@ -54,7 +54,6 @@
             - .local/
             - .local/share/
             - .local/state/
-            - scripts/
 
         - name: Allow SSH access for user "{{ user.name }}"
           ansible.posix.authorized_key:
@@ -87,6 +86,9 @@
             path: "$HOME/{{ item }}"
             state: absent
           loop:
+            - .bash_logout
+            - .bashrc
+            - .profile
             - .zshrc
             - oh-my-zsh-install.sh
 
