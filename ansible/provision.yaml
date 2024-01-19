@@ -28,13 +28,13 @@
 
     - name: Ensure user group 1000 exists
       ansible.builtin.group:
-        name: jordy
+        name: "{{ user.name }}"
         state: present
         gid: 1000
 
-    - name: Add user 'jordy' and add it to group 1000
+    - name: Add user "{{ user.name }}" and add it to group 1000
       ansible.builtin.user:
-        name: jordy
+        name: "{{ user.name }}"
         password: "{{ user.password | password_hash('sha512', user.salt) }}"
         uid: 1000
         group: 1000
@@ -44,7 +44,7 @@
       block:
         - name: Create user directories
           ansible.builtin.file:
-            path: "/home/jordy/{{ item }}"
+            path: "$HOME/{{ item }}"
             state: directory
             mode: 0700
           loop:
@@ -56,15 +56,15 @@
             - .local/state/
             - scripts/
 
-        - name: Allow SSH access for user jordy
+        - name: Allow SSH access for user "{{ user.name }}"
           ansible.posix.authorized_key:
-            user: jordy
+            user: "{{ user.name }}"
             state: present
             key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
 
-        - name: Add 'jordy' user to groups
+        - name: Add "{{ user.name }}" user to groups
           ansible.builtin.user:
-            name: jordy
+            name: "{{ user.name }}"
             groups:
               - sudo
               - docker
@@ -73,38 +73,37 @@
         - name: Download oh-my-zsh
           ansible.builtin.get_url:
             url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
-            dest: /home/jordy/oh-my-zsh-install.sh
+            dest: "$HOME/oh-my-zsh-install.sh"
             mode: 0700
 
         - name: Install oh-my-zsh
           ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
           args:
-            chdir: /home/jordy/
-            creates: /home/jordy/.oh-my-zsh/
+            chdir: "$HOME"
+            creates: "$HOME/.oh-my-zsh/"
 
-        - name: Clean up installation artifacts
+        - name: Clean up installation artifacts and other unused files
           ansible.builtin.file:
-            path: "/home/jordy/{{ item }}"
+            path: "$HOME/{{ item }}"
             state: absent
           loop:
-            - oh-my-zsh-install.sh
             - .zshrc
+            - oh-my-zsh-install.sh
 
-        # TODO perform everything as jordy to simplify setting file ownership
         # TODO clone Asdf
         # TODO install latest version of neovim
 
         - name: Clone dotfiles repository
           ansible.builtin.git:
             repo: https://github.com/99linesofcode/dotfiles.git
-            dest: /home/jordy/dotfiles
+            dest: "$HOME/dotfiles"
             single_branch: yes
             version: main
 
         - name: Symlink relevant dotfiles
           ansible.builtin.file:
-            src: "/home/jordy/dotfiles/{{ item }}"
-            dest: "/home/jordy/{{ item }}"
+            src: "$HOME/dotfiles/{{ item }}"
+            dest: "$HOME/{{ item }}"
             state: link
           loop:
             - .zshrc
@@ -118,4 +117,4 @@
         #     state: absent
         #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
       become: true
-      become_user: jordy
+      become_user: "{{ user.name }}"
