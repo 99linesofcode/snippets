@@ -32,15 +32,19 @@
         state: present
         gid: 1000
 
-    - name: Add user "{{ user.name }}" and add it to group 1000
+    - name: Create user "{{ user.name }}", set group id and add to relevant groups
       ansible.builtin.user:
         name: "{{ user.name }}"
         password: "{{ user.password | password_hash('sha512', user.salt) }}"
+        append: true
         uid: 1000
         group: 1000
+        groups:
+          - sudo
+          - docker
         shell: /bin/zsh
 
-    - name: configure user environment
+    - name: Configure user environment
       block:
         - name: Create user directories
           ansible.builtin.file:
@@ -60,14 +64,6 @@
             user: "{{ user.name }}"
             state: present
             key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
-
-        - name: Add "{{ user.name }}" user to groups
-          ansible.builtin.user:
-            name: "{{ user.name }}"
-            groups:
-              - sudo
-              - docker
-            append: true
 
         - name: Download oh-my-zsh
           ansible.builtin.get_url:
