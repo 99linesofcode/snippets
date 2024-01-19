@@ -65,17 +65,37 @@
             state: present
             key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
 
-        - name: Download oh-my-zsh
+        - name: Download Oh My Zsh
           ansible.builtin.get_url:
             url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
             dest: "$HOME/oh-my-zsh-install.sh"
             mode: 0700
 
-        - name: Install oh-my-zsh
+        - name: Install Oh My Zsh
           ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
           args:
             chdir: "$HOME"
             creates: "$HOME/.oh-my-zsh/"
+
+        - name: Install Asdf. The tool version manager
+          ansible.builtin.git:
+            repo: https://github.com/asdf-vm/asdf.git
+            dest: "$HOME/.asdf"
+
+        - name: Pull dotfiles repository
+          ansible.builtin.git:
+            repo: https://github.com/99linesofcode/dotfiles.git
+            dest: "$HOME/dotfiles"
+            single_branch: yes
+            version: main
+
+        - name: Install Neovim through Asdf
+          ansible.builtin.shell: |
+            export ASDF_DIR="$HOME/.asdf"
+            . $HOME/.asdf/asdf.sh
+            asdf plugin add neovim
+            asdf install neovim stable
+            asdf global neovim stable
 
         - name: Clean up installation artifacts and other unused files
           ansible.builtin.file:
@@ -88,24 +108,12 @@
             - .zshrc
             - oh-my-zsh-install.sh
 
-        # TODO clone Asdf
-        # TODO install latest version of neovim
-
-        - name: Clone dotfiles repository
-          ansible.builtin.git:
-            repo: https://github.com/99linesofcode/dotfiles.git
-            dest: "$HOME/dotfiles"
-            single_branch: yes
-            version: main
-
-        - name: Symlink relevant dotfiles
-          ansible.builtin.file:
-            src: "$HOME/dotfiles/{{ item }}"
-            dest: "$HOME/{{ item }}"
-            state: link
+        - name: Create the relevant symbolic links
+          ansible.builtin.shell: "ln -sfn {{ item.src }} {{ item.dest }}"
           loop:
-            - .zshrc
-            - .config/nvim
+            - { src: "$HOME/dotfiles/.zshrc", dest: "$HOME/.zshrc" }
+            - { src: "$HOME/dotfiles/.config/nvim", dest: "$HOME/.config/nvim" }
+            - { src: "$(which nvim)", dest: "$HOME/.local/bin/vi" }
 
         - name: Remove keychain plugin and identity loading configuration from .zshrc
           ansible.builtin.lineinfile:
@@ -116,11 +124,11 @@
             - "gpg-agent$"
             - "^zstyle :omz:plugins:keychain agents gpg,ssh"
             - "^zstyle :omz:plugins:keychain identities .*"
-
-        # - name: Remove root SSH access
-        #   ansible.posix.authorized_key:
-        #     user: root
-        #     state: absent
-        #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
       become: true
       become_user: "{{ user.name }}"
+
+      # - name: Remove root SSH access
+      #   ansible.posix.authorized_key:
+      #     user: root
+      #     state: absent
+      #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
