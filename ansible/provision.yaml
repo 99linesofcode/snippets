@@ -20,6 +20,12 @@
           - fd-find
           - tmux
 
+    - name: Disable and mask Docker daemon
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: false
+        masked: true
+
     - name: Ensure user group 1000 exists
       ansible.builtin.group:
         name: jordy
@@ -34,92 +40,82 @@
         group: 1000
         shell: /bin/zsh
 
-    - name: Create user directories
-      ansible.builtin.file:
-        path: "/home/jordy/{{ item }}"
-        state: directory
-        owner: jordy
-        group: jordy
-        mode: 0700
-      loop:
-        - .ssh/
-        - .config/
-        - .local/bin/
-        - .local/
-        - .local/share/
-        - .local/state/
-        - scripts/
+    - name: configure user environment
+      block:
+        - name: Create user directories
+          ansible.builtin.file:
+            path: "/home/jordy/{{ item }}"
+            state: directory
+            mode: 0700
+          loop:
+            - .ssh/
+            - .config/
+            - .local/bin/
+            - .local/
+            - .local/share/
+            - .local/state/
+            - scripts/
 
-    - name: Allow SSH access for user jordy
-      ansible.posix.authorized_key:
-        user: jordy
-        state: present
-        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
+        - name: Allow SSH access for user jordy
+          ansible.posix.authorized_key:
+            user: jordy
+            state: present
+            key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
 
-    - name: Disable and mask Docker daemon
-      ansible.builtin.systemd_service:
-        name: docker
-        enabled: false
-        masked: true
+        - name: Add 'jordy' user to groups
+          ansible.builtin.user:
+            name: jordy
+            groups:
+              - sudo
+              - docker
+            append: true
 
-    - name: Add 'jordy' user to groups
-      ansible.builtin.user:
-        name: jordy
-        groups:
-          - sudo
-          - docker
-        append: true
+        - name: Download oh-my-zsh
+          ansible.builtin.get_url:
+            url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+            dest: /home/jordy/oh-my-zsh-install.sh
+            mode: 0700
 
-    - name: Download oh-my-zsh
-      ansible.builtin.get_url:
-        url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
-        dest: /home/jordy/oh-my-zsh-install.sh
-        owner: jordy
-        group: jordy
-        mode: 0700
+        - name: Install oh-my-zsh
+          ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
+          args:
+            chdir: /home/jordy/
+            creates: /home/jordy/.oh-my-zsh/
 
-    - name: Install oh-my-zsh
-      ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
-      become: yes
+        - name: Clean up installation artifacts
+          ansible.builtin.file:
+            path: "/home/jordy/{{ item }}"
+            state: absent
+          loop:
+            - oh-my-zsh-install.sh
+            - .zshrc
+
+        # TODO perform everything as jordy to simplify setting file ownership
+        # TODO clone Asdf
+        # TODO install latest version of neovim
+
+        - name: Clone dotfiles repository
+          ansible.builtin.git:
+            repo: https://github.com/99linesofcode/dotfiles.git
+            dest: /home/jordy/dotfiles
+            single_branch: yes
+            version: main
+
+        - name: Symlink relevant dotfiles
+          ansible.builtin.file:
+            src: "/home/jordy/dotfiles/{{ item }}"
+            dest: "/home/jordy/{{ item }}"
+            state: link
+          loop:
+            - .zshrc
+            - .config/nvim
+
+        # TODO remove ssh-agent and ssh-agent identity loading
+
+        # - name: Remove root SSH access
+        #   ansible.posix.authorized_key:
+        #     user: root
+        #     state: absent
+        #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
+      become: true
       become_user: jordy
-      args:
-        chdir: /home/jordy/
-        creates: /home/jordy/.oh-my-zsh/
-
-    - name: Clean up installation artifacts
-      ansible.builtin.file:
-        path: "/home/jordy/{{ item }}"
-        state: absent
-      loop:
-        - oh-my-zsh-install.sh
-        - .zshrc
-
-    # TODO perform everything as jordy to simplify setting file ownership
-    # TODO clone Asdf
-    # TODO install latest version of neovim
-
-    - name: Clone dotfiles repository
-      ansible.builtin.git:
-        repo: https://github.com/99linesofcode/dotfiles.git
-        dest: /home/jordy/dotfiles
-        single_branch: yes
-        version: main
-
-    - name: Symlink relevant dotfiles
-      ansible.builtin.file:
-        src: "/home/jordy/dotfiles/{{ item }}"
-        dest: "/home/jordy/{{ item }}"
-        owner: jordy
-        group: jordy
-        state: link
-      loop:
-        - .zshrc
-        - .config/nvim
-
-    # TODO remove ssh-agent and ssh-agent identity loading
-
-    # - name: Remove root SSH access
-    #   ansible.posix.authorized_key:
-    #     user: root
-    #     state: absent
-    #     key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/blade_strato_ed25519.pub')}}"
