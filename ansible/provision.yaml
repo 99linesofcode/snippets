@@ -1,6 +1,8 @@
 ---
 - name: Provision
   hosts: personal
+  vars_files:
+    - ./variables.yaml
   tasks:
     - name: Update package registry
       ansible.builtin.apt:
@@ -27,6 +29,7 @@
     - name: Add user 'jordy' and add it to group 1000
       ansible.builtin.user:
         name: jordy
+        password: "{{ user.password | password_hash('sha512', user.salt) }}"
         uid: 1000
         group: 1000
         shell: /bin/zsh
