@@ -8,17 +8,38 @@
       ansible.builtin.apt:
         upgrade: dist
 
+    - name: Add Docker public signing key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository to sources list
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+
+    - name: Update package registry
+      ansible.builtin.apt:
+        upgrade: dist
+
     - name: Install base dependencies
       ansible.builtin.apt:
         pkg:
+          - ca-certificates
           - curl
-          - git
+          - gnupg
+          - containerd.io
           - dbus-user-session
-          - docker.io
-          - zsh
-          - ripgrep
+          - docker-ce
+          - docker-ce-cli
+          - docker-buildx-plugin
+          - docker-compose-plugin
           - fd-find
+          - git
+          - neofetch
+          - ripgrep
           - tmux
+          - zsh
 
     - name: Disable and mask Docker daemon
       ansible.builtin.systemd_service:
