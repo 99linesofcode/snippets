@@ -75,8 +75,8 @@
           loop:
             - .ssh/
             - .config/
-            - .local/bin/
             - .local/
+            - .local/bin/
             - .local/share/
             - .local/state/
 
@@ -86,23 +86,6 @@
             state: present
             key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
 
-        - name: Download Oh My Zsh
-          ansible.builtin.get_url:
-            url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
-            dest: "$HOME/oh-my-zsh-install.sh"
-            mode: 0700
-
-        - name: Install Oh My Zsh
-          ansible.builtin.command: ./oh-my-zsh-install.sh --unattended
-          args:
-            chdir: "$HOME"
-            creates: "$HOME/.oh-my-zsh/"
-
-        - name: Install Asdf. The tool version manager
-          ansible.builtin.git:
-            repo: https://github.com/asdf-vm/asdf.git
-            dest: "$HOME/.asdf"
-
         - name: Pull dotfiles repository
           ansible.builtin.git:
             repo: https://github.com/99linesofcode/dotfiles.git
@@ -110,14 +93,6 @@
             single_branch: yes
             version: main
             force: true
-
-        - name: Install Neovim through Asdf
-          ansible.builtin.shell: |
-            export ASDF_DIR="$HOME/.asdf"
-            . $HOME/.asdf/asdf.sh
-            asdf plugin add neovim
-            asdf install neovim stable
-            asdf global neovim stable
 
         - name: Clean up installation artifacts and other unused files
           ansible.builtin.file:
@@ -130,12 +105,10 @@
             - .zshrc
             - oh-my-zsh-install.sh
 
-        - name: Create the relevant symbolic links
-          ansible.builtin.shell: "ln -sfn {{ item.src }} {{ item.dest }}"
-          loop:
-            - { src: "$HOME/dotfiles/.zshrc", dest: "$HOME/.zshrc" }
-            - { src: "$HOME/dotfiles/.config/nvim", dest: "$HOME/.config/nvim" }
-            - { src: "$(which nvim)", dest: "$HOME/.local/bin/vi" }
+        - name: Run dotfiles/install.sh script to configure user environment
+          ansible.builtin.shell:
+            chdir: "$HOME/dotfiles"
+            cmd: ./install.sh
 
         - name: Remove keychain plugin and identity loading configuration from .zshrc
           ansible.builtin.lineinfile:
