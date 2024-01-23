@@ -4,10 +4,6 @@
   vars_files:
     - ./variables.yaml
   tasks:
-    - name: Update package registry
-      ansible.builtin.apt:
-        upgrade: dist
-
     - name: Add Docker public signing key
       ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
