@@ -4,10 +4,6 @@
   vars_files:
     - ./variables.yaml
   tasks:
-    - name: Update package registry
-      ansible.builtin.apt:
-        upgrade: dist
-
     - name: Add Docker public signing key
       ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
@@ -39,13 +35,18 @@
           - neofetch
           - ripgrep
           - tmux
+          - uidmap
           - zsh
 
-    - name: Disable and mask Docker daemon
+    # NOTE running Docker in rootless mode has its limitations: https://docs.docker.com/engine/security/rootless/#known-limitations
+    - name: Disable and mask Docker systemd services
       ansible.builtin.systemd_service:
-        name: docker
+        name: "{{ item }}"
         enabled: false
         masked: true
+      loop:
+        - docker.service
+        - docker.socket
 
     - name: Ensure user group 1000 exists
       ansible.builtin.group:
@@ -67,6 +68,15 @@
 
     - name: Configure user environment
       block:
+        - name: Setup rootless Docker daemon
+          ansible.builtin.shell: dockerd-rootless-setuptool.sh install
+
+        - name: Enable Docker systemd user service
+          ansible.builtin.systemd_service:
+            name: docker.service
+            enabled: true
+            scope: user
+
         - name: Create user directories
           ansible.builtin.file:
             path: "$HOME/{{ item }}"
@@ -121,6 +131,12 @@
             - "^zstyle :omz:plugins:keychain identities .*"
       become: true
       become_user: "{{ user.name }}"
+
+    - name: Launch Docker daemon on system startup
+      ansible.builtin.shell: "loginctl enable-linger {{ user.name }}"
+
+    - name: Allow Docker to expose priviledged ports (< 1024)
+      ansible.builtin.shell: "setcap cap_net_bind_service=ep $(which rootlesskit)"
 
     - name: Remove public SSH key from root account
       ansible.posix.authorized_key:
