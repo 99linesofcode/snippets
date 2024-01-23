@@ -81,7 +81,11 @@
             enabled: true
             scope: user
 
-        # TODO enable-linger to run docker.service on system startup (sudo loginctl enable-linger user.name)
+        - name: Launch daemon on system startup
+          ansible.builtin.shell: "loginctl enable-linger {{ user.name }}"
+          become: yes
+          become_user: root
+
         # TODO expose priviledged ports https://docs.docker.com/engine/security/rootless/#exposing-privileged-ports
 
         - name: Create user directories
