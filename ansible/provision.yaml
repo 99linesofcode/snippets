@@ -77,16 +77,6 @@
             enabled: true
             scope: user
 
-        - name: Launch daemon on system startup
-          ansible.builtin.shell: "loginctl enable-linger {{ user.name }}"
-          become: yes
-          become_user: root
-
-        - name: Expose priviledged ports (< 1024)
-          ansible.builtin.shell: "setcap cap_net_bind_service=ep $(which rootlesskit)"
-          become: yes
-          become_user: root
-
         - name: Create user directories
           ansible.builtin.file:
             path: "$HOME/{{ item }}"
@@ -141,6 +131,12 @@
             - "^zstyle :omz:plugins:keychain identities .*"
       become: true
       become_user: "{{ user.name }}"
+
+    - name: Launch Docker daemon on system startup
+      ansible.builtin.shell: "loginctl enable-linger {{ user.name }}"
+
+    - name: Allow Docker to expose priviledged ports (< 1024)
+      ansible.builtin.shell: "setcap cap_net_bind_service=ep $(which rootlesskit)"
 
     - name: Remove public SSH key from root account
       ansible.posix.authorized_key:
