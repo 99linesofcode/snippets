@@ -86,7 +86,10 @@
           become: yes
           become_user: root
 
-        # TODO expose priviledged ports https://docs.docker.com/engine/security/rootless/#exposing-privileged-ports
+        - name: Expose priviledged ports (< 1024)
+          ansible.builtin.shell: "setcap cap_net_bind_service=ep $(which rootlesskit)"
+          become: yes
+          become_user: root
 
         - name: Create user directories
           ansible.builtin.file:
