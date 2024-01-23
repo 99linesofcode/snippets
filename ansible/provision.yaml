@@ -72,6 +72,18 @@
 
     - name: Configure user environment
       block:
+        - name: Setup rootless Docker daemon
+          ansible.builtin.shell: docker-rootless-setuptool.sh install
+
+        - name: Enable Docker systemd user service
+          ansible.builtin.systemd_service:
+            name: docker.service
+            enabled: true
+            scope: user
+
+        # TODO enable-linger to run docker.service on system startup (sudo loginctl enable-linger user.name)
+        # TODO expose priviledged ports https://docs.docker.com/engine/security/rootless/#exposing-privileged-ports
+
         - name: Create user directories
           ansible.builtin.file:
             path: "$HOME/{{ item }}"
@@ -124,11 +136,6 @@
             - "gpg-agent$"
             - "^zstyle :omz:plugins:keychain agents gpg,ssh"
             - "^zstyle :omz:plugins:keychain identities .*"
-
-        # TODO run docker-rootless-setuptool.sh install
-        # TODO enable-linger to run docker.service on system startup (sudo loginctl enable-linger user.name)
-        # TODO expose priviledged ports https://docs.docker.com/engine/security/rootless/#exposing-privileged-ports
-
       become: true
       become_user: "{{ user.name }}"
 
