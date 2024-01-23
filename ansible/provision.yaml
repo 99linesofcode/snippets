@@ -39,13 +39,18 @@
           - neofetch
           - ripgrep
           - tmux
+          - uidmap
           - zsh
 
-    - name: Disable and mask Docker daemon
+    # NOTE running Docker in rootless mode has its limitations: https://docs.docker.com/engine/security/rootless/#known-limitations
+    - name: Disable and mask Docker systemd services
       ansible.builtin.systemd_service:
-        name: docker
+        name: "{{ item }}"
         enabled: false
         masked: true
+      loop:
+        - docker.service
+        - docker.socket
 
     - name: Ensure user group 1000 exists
       ansible.builtin.group:
@@ -119,6 +124,11 @@
             - "gpg-agent$"
             - "^zstyle :omz:plugins:keychain agents gpg,ssh"
             - "^zstyle :omz:plugins:keychain identities .*"
+
+        # TODO run docker-rootless-setuptool.sh install
+        # TODO enable-linger to run docker.service on system startup (sudo loginctl enable-linger user.name)
+        # TODO expose priviledged ports https://docs.docker.com/engine/security/rootless/#exposing-privileged-ports
+
       become: true
       become_user: "{{ user.name }}"
 
