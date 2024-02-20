@@ -32,6 +32,7 @@
           - docker-buildx-plugin
           - docker-compose-plugin
           - fd-find
+          - fzf
           - git
           - neofetch
           - ripgrep
@@ -97,6 +98,18 @@
             state: present
             key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + ssh_key) }}"
 
+        - name: Download zoxide installer script
+          ansible.builtin.get_url:
+            url: "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh"
+            dest: "$HOME/zoxide-install.sh"
+            mode: 0700
+
+        - name: Install zoxide binary
+          ansible.builtin.command: ./zoxide-install.sh --unattended
+          args:
+            chdir: "$HOME"
+            creates: "/usr/bin/zoxide"
+
         - name: Pull dotfiles repository
           ansible.builtin.git:
             repo: https://github.com/99linesofcode/dotfiles.git
@@ -114,6 +127,7 @@
             - .bashrc
             - .profile
             - .zshrc
+            - zoxide-install.sh
             - oh-my-zsh-install.sh
 
         - name: Run dotfiles/install.sh script to configure user environment
